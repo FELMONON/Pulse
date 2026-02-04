@@ -2,10 +2,6 @@
 
 > A minimal, beautiful macOS System Monitor Widget for Notification Center
 
-<p align="center">
-  <img src="screenshots/widgets.png" width="250" alt="Pulse Widget">
-</p>
-
 ## Features
 
 **Activity Ring Design** — Apple Watch-inspired circular progress indicators with distinct colors:
