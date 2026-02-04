@@ -1,82 +1,62 @@
 # Pulse
 
-A beautiful macOS System Monitor Widget for Notification Center. Monitor your Mac's performance at a glance with Apple Watch-inspired activity rings.
-
-## Features
-
-- **Real-time Monitoring** - CPU, RAM, Disk, Battery & Network stats updated every 15 seconds
-- **Activity Ring Design** - Apple Watch-inspired circular progress indicators
-- **Distinct Colors** - Each metric has its own color for quick identification:
-  - 🟢 CPU - Green
-  - 🔵 RAM - Blue
-  - 🟠 Disk - Amber
-- **Battery Indicator** - Color-coded battery status (Green ≥50%, Amber 21-49%, Red ≤20%)
-- **Network Speed** - Upload and download speeds in MB/s
-- **Multiple Sizes** - Small, Medium, and Large widget options
-- **Apple HIG Compliant** - Native macOS design language
-
-## Screenshot
+> A minimal, beautiful macOS System Monitor Widget for Notification Center
 
 ![Pulse Widget](screenshots/medium-widget.png)
 
+## Features
+
+**Activity Ring Design** — Apple Watch-inspired circular progress indicators with distinct colors:
+
+| Metric | Color | Description |
+|--------|-------|-------------|
+| CPU | 🟢 Green | Processor usage |
+| RAM | 🔵 Blue | Memory usage |
+| Disk | 🟠 Amber | Storage usage |
+
+**Smart Battery Indicator** — Color-coded status that changes based on level:
+- Green (≥50%) — Healthy
+- Amber (21-49%) — Moderate
+- Red (≤20%) — Low
+
+**Network Monitor** — Real-time upload/download speeds in MB/s
+
+**Three Widget Sizes** — Small, Medium, and Large options for Notification Center
+
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
-- Xcode 15.0 or later (for building)
+- macOS 14.0 Sonoma or later
+- Xcode 15.0+ (for building from source)
 
 ## Installation
 
-### From Source
+**Clone & Build:**
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/FELMONON/Pulse.git
-   cd Pulse
-   ```
+```bash
+git clone https://github.com/FELMONON/Pulse.git
+cd Pulse
+open Pulse.xcodeproj
+```
 
-2. Open in Xcode:
-   ```bash
-   open MacMonitorWidget.xcodeproj
-   ```
+Then press `⌘R` to build and run.
 
-3. Build and run (⌘R)
+**Add to Notification Center:**
 
-4. Add widget to Notification Center:
-   - Click the date in your menu bar
-   - Click "Edit Widgets"
-   - Search for "Pulse"
-   - Drag to add
-
-## Widget Sizes
-
-### Small Widget
-- Battery status
-- CPU & RAM activity rings
-- Network speed
-
-### Medium Widget
-- CPU, RAM & Disk activity rings
-- Battery status
-- RAM & Disk usage details
-- Network speed
-
-### Large Widget
-- All activity rings
-- Detailed memory & storage stats
-- Network activity
-- Running apps list
+1. Click the date/time in your menu bar
+2. Scroll down and click **Edit Widgets**
+3. Search for **Pulse**
+4. Drag your preferred size to the sidebar
 
 ## Tech Stack
 
-- SwiftUI
-- WidgetKit
-- IOKit (for system stats)
-- AppKit
+- SwiftUI + WidgetKit
+- IOKit for system metrics
+- AppKit for app detection
 
 ## License
 
-MIT License
+MIT
 
-## Author
+---
 
-Built with Claude Code
+*Built with [Claude Code](https://claude.ai/code)*
