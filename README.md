@@ -15,11 +15,9 @@ A beautiful macOS System Monitor Widget for Notification Center. Monitor your Ma
 - **Multiple Sizes** - Small, Medium, and Large widget options
 - **Apple HIG Compliant** - Native macOS design language
 
-## Screenshots
+## Screenshot
 
-| Small | Medium | Large |
-|-------|--------|-------|
-| CPU & RAM | CPU, RAM & Disk | Full Stats + Running Apps |
+![Pulse Widget](screenshots/medium-widget.png)
 
 ## Requirements
 
