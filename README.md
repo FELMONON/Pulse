@@ -2,7 +2,9 @@
 
 > A minimal, beautiful macOS System Monitor Widget for Notification Center
 
-![Pulse Widget](screenshots/widgets.png)
+<p align="center">
+  <img src="screenshots/widgets.png" width="250" alt="Pulse Widget">
+</p>
 
 ## Features
 
