@@ -35,7 +35,7 @@
 
 **Download a Release:**
 
-Download the latest `.dmg` or `.zip` from GitHub Releases, then move `Pulse.app` to `/Applications`. If macOS blocks the first launch, confirm that the downloaded artifact came from the project release page and open it again from Finder.
+Download the latest `.zip` from GitHub Releases, unzip it, then move `Pulse.app` to `/Applications`. If a `.dmg` is provided, it contains the same app and can be installed by dragging `Pulse.app` to `/Applications`.
 
 **Build from Source:**
 
@@ -53,7 +53,7 @@ Then press `⌘R` to build and run.
 ./scripts/build-install-release.sh
 ```
 
-The script builds the release app, signs the app and widget extension with the shared app-group entitlement, installs it to `/Applications/Pulse.app`, verifies the signature, and relaunches Pulse. It defaults to team `WJX5PBY73S`; override `SIGNING_IDENTITY`, `DEVELOPMENT_TEAM`, `INSTALL_PATH`, or `LAUNCH_AFTER_INSTALL` if needed.
+The script builds the release app, signs the app and widget extension with the shared app-group entitlement, installs it to `/Applications/Pulse.app`, verifies the signature, and relaunches Pulse. It defaults to the project team; override `SIGNING_IDENTITY`, `DEVELOPMENT_TEAM`, `INSTALL_PATH`, or `LAUNCH_AFTER_INSTALL` if needed.
 
 For Developer ID signing, set a Developer ID Application identity. Hardened runtime and timestamping are enabled automatically for identities that start with `Developer ID Application:`.
 
@@ -88,6 +88,8 @@ CREATE_DMG=0 APP_PATH="$PWD/build/release/Pulse.app" ./scripts/package-release.s
 REQUIRE_DEVELOPER_ID=0 APP_PATH="/Applications/Pulse.app" ./scripts/package-release.sh
 DMG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" ./scripts/package-release.sh
 ```
+
+The zip artifact preserves the signed and stapled `Pulse.app`. A DMG can also be notarized and stapled, but code-signing the disk image itself requires a local `Developer ID Application` private key available to `codesign`; Xcode cloud-managed signing can sign the app export but cannot be used directly by `codesign` for the DMG.
 
 ### Notarization
 

@@ -159,16 +159,35 @@ EOF
 submit_for_notarization() {
   local target="$1"
   local submit_target="$target"
+  local result_json
 
+  mkdir -p "$WORK_DIR/notary"
   if [[ -d "$target" ]]; then
-    mkdir -p "$WORK_DIR/notary"
     submit_target="$WORK_DIR/notary/$(basename "${target%.*}")-notary.zip"
     rm -f "$submit_target"
     ditto -c -k --keepParent "$target" "$submit_target"
   fi
 
   printf 'Submitting %s for notarization...\n' "$(basename "$target")"
-  xcrun notarytool submit "$submit_target" --wait "${NOTARY_ARGS[@]}"
+  result_json="$WORK_DIR/notary/$(basename "${target%.*}")-notary-result.json"
+  if ! xcrun notarytool submit "$submit_target" --wait --output-format json "${NOTARY_ARGS[@]}" > "$result_json"; then
+    cat "$result_json" >&2
+    fail "notarization submission failed for $target"
+  fi
+
+  local submission_id
+  local status
+  submission_id="$(plutil -extract id raw -o - "$result_json" 2>/dev/null || true)"
+  status="$(plutil -extract status raw -o - "$result_json" 2>/dev/null || true)"
+  [[ -n "$submission_id" ]] && printf 'Submission ID: %s\n' "$submission_id"
+  printf 'Notarization status: %s\n' "${status:-unknown}"
+  if [[ "$status" != "Accepted" ]]; then
+    cat "$result_json" >&2
+    if [[ -n "$submission_id" ]]; then
+      xcrun notarytool log "$submission_id" "${NOTARY_ARGS[@]}" >&2 || true
+    fi
+    fail "notarization failed for $target"
+  fi
 
   printf 'Stapling notarization ticket to %s...\n' "$(basename "$target")"
   xcrun stapler staple "$target"
@@ -188,6 +207,7 @@ fi
 if [[ "$NOTARIZE" == "1" ]]; then
   REQUIRE_DEVELOPER_ID=1
   require_tool xcrun
+  require_tool plutil
   build_notary_args
 fi
 
@@ -248,6 +268,13 @@ if [[ "$CREATE_DMG" == "1" ]]; then
     printf 'Signing dmg with: %s\n' "$DMG_SIGNING_IDENTITY"
     codesign --force --sign "$DMG_SIGNING_IDENTITY" --timestamp "$DMG_PATH"
     codesign --verify --verbose=2 "$DMG_PATH"
+  elif [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
+    cat >&2 <<'EOF'
+warning: DMG_SIGNING_IDENTITY is not set, so the DMG will not have a
+disk-image code signature. The app inside can still be Developer ID signed,
+notarized, and stapled. For a public DMG release, pass a local Developer ID
+Application identity with DMG_SIGNING_IDENTITY.
+EOF
   fi
 
   if [[ "$NOTARIZE" == "1" && "$NOTARIZE_DMG" == "1" ]]; then
