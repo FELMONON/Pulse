@@ -17,6 +17,10 @@ Pulse is a minimal macOS Notification Center widget for quick system monitoring.
 
 - macOS 14.0 Sonoma or later.
 
+## Signing Status
+
+Public macOS distribution requires a `Developer ID Application` certificate and notarization. The release packaging script now enforces Developer ID signing by default. If artifacts are produced with `REQUIRE_DEVELOPER_ID=0`, treat them as local development builds, not public notarized releases.
+
 ## Install
 
 Download either release artifact:

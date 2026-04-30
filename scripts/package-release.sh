@@ -16,6 +16,7 @@ Environment variables:
   RELEASE_BASENAME                 Artifact basename. Default: Pulse-<CFBundleShortVersionString>
   CREATE_ZIP                       Create a .zip. Default: 1
   CREATE_DMG                       Create a .dmg. Default: 1
+  REQUIRE_DEVELOPER_ID             Require Developer ID Application signing. Default: 1
   DMG_SIGNING_IDENTITY             Optional Developer ID identity for signing the .dmg.
   NOTARIZE                         Submit and staple app, and optionally dmg. Default: 0
   NOTARIZE_DMG                     Notarize/staple .dmg when NOTARIZE=1. Default: CREATE_DMG
@@ -29,6 +30,7 @@ Examples:
   ./scripts/package-release.sh
   APP_PATH=/Applications/Pulse.app CREATE_DMG=0 ./scripts/package-release.sh
   NOTARIZE=1 NOTARYTOOL_KEYCHAIN_PROFILE=pulse-release ./scripts/package-release.sh
+  REQUIRE_DEVELOPER_ID=0 APP_PATH=/Applications/Pulse.app ./scripts/package-release.sh
 USAGE
 }
 
@@ -45,6 +47,7 @@ APP_PATH="${APP_PATH:-$ROOT_DIR/build/DerivedData/Build/Products/$CONFIGURATION/
 RELEASE_DIR="${RELEASE_DIR:-$ROOT_DIR/build/release}"
 CREATE_ZIP="${CREATE_ZIP:-1}"
 CREATE_DMG="${CREATE_DMG:-1}"
+REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-1}"
 NOTARIZE="${NOTARIZE:-0}"
 NOTARIZE_DMG="${NOTARIZE_DMG:-$CREATE_DMG}"
 PRESERVE_WORK="${PRESERVE_WORK:-0}"
@@ -97,6 +100,31 @@ certificate before packaging. Example:
   ./scripts/build-install-release.sh
 EOF
     exit 1
+  fi
+
+  if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
+    local authorities
+    authorities="$(codesign -dv --verbose=4 "$app_path" 2>&1 | awk -F= '/^Authority=/ {print $2}')"
+    if ! printf '%s\n' "$authorities" | grep -q '^Developer ID Application:'; then
+      cat >&2 <<EOF
+error: $app_path is not signed with a Developer ID Application identity.
+
+Observed signing authorities:
+$(printf '%s\n' "$authorities" | sed 's/^/  /')
+
+Public macOS releases should be signed with Developer ID before packaging and
+notarization. Rebuild with an installed Developer ID Application certificate:
+
+  DEVELOPMENT_TEAM="TEAMID1234" \\
+  SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" \\
+  INSTALL_PATH="\$PWD/build/release/Pulse.app" \\
+  LAUNCH_AFTER_INSTALL=0 \\
+  ./scripts/build-install-release.sh
+
+For a local development artifact only, rerun with REQUIRE_DEVELOPER_ID=0.
+EOF
+      exit 1
+    fi
   fi
 }
 
@@ -158,6 +186,7 @@ if [[ "$CREATE_DMG" == "1" ]]; then
   require_tool hdiutil
 fi
 if [[ "$NOTARIZE" == "1" ]]; then
+  REQUIRE_DEVELOPER_ID=1
   require_tool xcrun
   build_notary_args
 fi
@@ -176,6 +205,7 @@ RELEASE_BASENAME="${RELEASE_BASENAME:-$PRODUCT_NAME-$SAFE_VERSION}"
 
 printf 'Packaging %s %s (%s) from %s\n' "$PRODUCT_NAME" "$APP_VERSION" "$APP_BUILD" "$APP_PATH"
 printf 'Bundle identifier: %s\n' "$APP_BUNDLE_ID"
+printf 'Require Developer ID: %s\n' "$REQUIRE_DEVELOPER_ID"
 printf 'Verifying source app signature...\n'
 verify_app_signature "$APP_PATH"
 

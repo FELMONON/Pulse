@@ -73,6 +73,8 @@ Package an already built and signed app into repeatable release artifacts:
 APP_PATH="$PWD/build/release/Pulse.app" ./scripts/package-release.sh
 ```
 
+Packaging requires a `Developer ID Application` signature by default, because those are the artifacts suitable for a public GitHub Release. For local-only development artifacts, add `REQUIRE_DEVELOPER_ID=0`.
+
 By default this creates:
 
 - `build/release/Pulse-<version>.zip`
@@ -83,6 +85,7 @@ Useful options:
 
 ```bash
 CREATE_DMG=0 APP_PATH="$PWD/build/release/Pulse.app" ./scripts/package-release.sh
+REQUIRE_DEVELOPER_ID=0 APP_PATH="/Applications/Pulse.app" ./scripts/package-release.sh
 DMG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" ./scripts/package-release.sh
 ```
 
