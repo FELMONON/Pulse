@@ -21,30 +21,109 @@
 
 **Three Widget Sizes** — Small, Medium, and Large options for Notification Center
 
+**Menu Bar Companion** — CPU/RAM summary with quick refresh, settings, and quit actions.
+
+**Configurable Background Refresh** — Launch at Login keeps the shared widget cache warm after reboot, with settings for refresh interval, units, and visible metrics.
+
 ## Requirements
 
 - macOS 14.0 Sonoma or later
 - Xcode 15.0+ (for building from source)
+- Apple Developer ID certificate and notary credentials for public releases
 
 ## Installation
 
-**Clone & Build:**
+**Download a Release:**
+
+Download the latest `.dmg` or `.zip` from GitHub Releases, then move `Pulse.app` to `/Applications`. If macOS blocks the first launch, confirm that the downloaded artifact came from the project release page and open it again from Finder.
+
+**Build from Source:**
 
 ```bash
-git clone https://github.com/FELMONON/Pulse.git
+git clone https://github.com/felmonon/Pulse.git
 cd Pulse
 open Pulse.xcodeproj
 ```
 
 Then press `⌘R` to build and run.
 
-**Scripted Local Install:**
+**Scripted Local Build and Install:**
 
 ```bash
 ./scripts/build-install-release.sh
 ```
 
-The script builds the release app, signs the app and widget extension with the shared app-group entitlement, installs it to `/Applications/Pulse.app`, verifies the signature, and relaunches Pulse. It defaults to team `WJX5PBY73S`; override `SIGNING_IDENTITY`, `DEVELOPMENT_TEAM`, or `INSTALL_PATH` if needed.
+The script builds the release app, signs the app and widget extension with the shared app-group entitlement, installs it to `/Applications/Pulse.app`, verifies the signature, and relaunches Pulse. It defaults to team `WJX5PBY73S`; override `SIGNING_IDENTITY`, `DEVELOPMENT_TEAM`, `INSTALL_PATH`, or `LAUNCH_AFTER_INSTALL` if needed.
+
+For Developer ID signing, set a Developer ID Application identity. Hardened runtime and timestamping are enabled automatically for identities that start with `Developer ID Application:`.
+
+```bash
+DEVELOPMENT_TEAM="TEAMID1234" \
+SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" \
+INSTALL_PATH="$PWD/build/release/Pulse.app" \
+LAUNCH_AFTER_INSTALL=0 \
+./scripts/build-install-release.sh
+```
+
+## Release Packaging
+
+Package an already built and signed app into repeatable release artifacts:
+
+```bash
+APP_PATH="$PWD/build/release/Pulse.app" ./scripts/package-release.sh
+```
+
+By default this creates:
+
+- `build/release/Pulse-<version>.zip`
+- `build/release/Pulse-<version>.dmg`
+- `build/release/Pulse-<version>-SHA256SUMS.txt`
+
+Useful options:
+
+```bash
+CREATE_DMG=0 APP_PATH="$PWD/build/release/Pulse.app" ./scripts/package-release.sh
+DMG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID1234)" ./scripts/package-release.sh
+```
+
+### Notarization
+
+Notarization requires Apple credentials, so it is opt-in. The script supports a stored notarytool keychain profile:
+
+```bash
+xcrun notarytool store-credentials pulse-release \
+  --apple-id "$APPLE_ID" \
+  --team-id "$APPLE_TEAM_ID" \
+  --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
+NOTARIZE=1 \
+NOTARYTOOL_KEYCHAIN_PROFILE=pulse-release \
+APP_PATH="$PWD/build/release/Pulse.app" \
+./scripts/package-release.sh
+```
+
+Or direct environment variables:
+
+```bash
+NOTARIZE=1 \
+APPLE_ID="you@example.com" \
+APPLE_TEAM_ID="TEAMID1234" \
+APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx" \
+APP_PATH="$PWD/build/release/Pulse.app" \
+./scripts/package-release.sh
+```
+
+When `NOTARIZE=1`, the script submits and staples the staged app before creating the final zip. If a DMG is enabled, it also submits and staples the DMG unless `NOTARIZE_DMG=0` is set.
+
+### Release Screenshots
+
+The screenshot helper is headless: it does not open the app, drive Finder, or call `screencapture`. Put existing PNG/JPEG/WebP files in `release-assets/screenshots`, then run:
+
+```bash
+./scripts/stage-screenshot-assets.sh
+```
+
+The staged images and manifest are written to `build/release/screenshots`.
 
 **Add to Notification Center:**
 

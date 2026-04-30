@@ -49,12 +49,11 @@ struct SystemStats: Codable {
 }
 
 // MARK: - Shared Stats Cache
-enum SystemStatsCache {
-    private static let appGroupID = "group.com.macmonitor.widget.shared"
-    private static let legacySuiteName = "com.macmonitor.widget.shared"
-    private static let statsKey = "latestSystemStats"
+enum PulseSharedDefaults {
+    static let appGroupID = "group.com.macmonitor.widget.shared"
+    static let legacySuiteName = "com.macmonitor.widget.shared"
 
-    private static let defaults: UserDefaults = {
+    static let defaults: UserDefaults = {
         if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) != nil,
            let groupDefaults = UserDefaults(suiteName: appGroupID) {
             return groupDefaults
@@ -62,6 +61,84 @@ enum SystemStatsCache {
 
         return UserDefaults(suiteName: legacySuiteName) ?? .standard
     }()
+}
+
+// MARK: - Shared Display Settings
+enum PulseSharedSettings {
+    static let defaults = PulseSharedDefaults.defaults
+    static let defaultRefreshInterval: TimeInterval = 1
+    static let refreshIntervals: [TimeInterval] = [1, 5, 15, 30, 60]
+
+    enum Keys {
+        static let launchAtLogin = "settings.launchAtLogin"
+        static let refreshInterval = "settings.refreshInterval"
+        static let unitsMode = "settings.unitsMode"
+        static let showBattery = "settings.showBattery"
+        static let showDisk = "settings.showDisk"
+        static let showNetwork = "settings.showNetwork"
+        static let showActiveApps = "settings.showActiveApps"
+    }
+
+    enum UnitsMode: String, CaseIterable, Identifiable {
+        case automatic = "auto"
+        case kilobytesPerSecond = "kbps"
+        case megabytesPerSecond = "mbps"
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .automatic: return "Auto"
+            case .kilobytesPerSecond: return "KB/s"
+            case .megabytesPerSecond: return "MB/s"
+            }
+        }
+    }
+
+    static var storedRefreshInterval: TimeInterval {
+        let value = defaults.object(forKey: Keys.refreshInterval) as? TimeInterval
+        return clampedRefreshInterval(value ?? defaultRefreshInterval)
+    }
+
+    static func clampedRefreshInterval(_ value: TimeInterval) -> TimeInterval {
+        min(max(value, 1), 60)
+    }
+
+    static func intervalLabel(_ interval: TimeInterval) -> String {
+        String(format: "%.0fs", interval)
+    }
+
+    static func percent(_ value: Double) -> String {
+        "\(Int((min(max(value, 0), 1) * 100).rounded()))%"
+    }
+
+    static func formatSpeed(_ speed: Double, unitsMode: UnitsMode) -> String {
+        switch unitsMode {
+        case .automatic:
+            if speed >= 1024 {
+                return formatMegabytes(speed / 1024)
+            }
+            return String(format: "%.0f KB/s", speed)
+        case .kilobytesPerSecond:
+            return String(format: "%.0f KB/s", speed)
+        case .megabytesPerSecond:
+            return formatMegabytes(speed / 1024)
+        }
+    }
+
+    private static func formatMegabytes(_ value: Double) -> String {
+        if value >= 10 {
+            return String(format: "%.0f MB/s", value)
+        }
+
+        return String(format: "%.1f MB/s", value)
+    }
+}
+
+// MARK: - Shared Stats Cache
+enum SystemStatsCache {
+    private static let statsKey = "latestSystemStats"
+    private static let defaults = PulseSharedDefaults.defaults
 
     static func save(_ stats: SystemStats) {
         guard let data = try? JSONEncoder().encode(stats) else {

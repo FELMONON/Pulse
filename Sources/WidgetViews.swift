@@ -129,6 +129,11 @@ struct BatteryView: View {
 struct NetworkView: View {
     let up: Double
     let down: Double
+    @AppStorage(PulseSharedSettings.Keys.unitsMode, store: PulseSharedSettings.defaults) private var unitsModeRaw = PulseSharedSettings.UnitsMode.automatic.rawValue
+
+    private var unitsMode: PulseSharedSettings.UnitsMode {
+        PulseSharedSettings.UnitsMode(rawValue: unitsModeRaw) ?? .automatic
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -137,7 +142,7 @@ struct NetworkView: View {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(AppColors.networkBlue)
-                Text(formatSpeed(up))
+                Text(PulseSharedSettings.formatSpeed(up, unitsMode: unitsMode))
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
             }
@@ -147,25 +152,10 @@ struct NetworkView: View {
                 Image(systemName: "arrow.down")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(AppColors.networkGreen)
-                Text(formatSpeed(down))
+                Text(PulseSharedSettings.formatSpeed(down, unitsMode: unitsMode))
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
             }
-        }
-    }
-
-    func formatSpeed(_ speed: Double) -> String {
-        if speed >= 1024 {
-            let mbps = speed / 1024
-            if mbps >= 100 {
-                return String(format: "%.0f MB/s", mbps)
-            } else if mbps >= 10 {
-                return String(format: "%.0f MB/s", mbps)
-            } else {
-                return String(format: "%.1f MB/s", mbps)
-            }
-        } else {
-            return String(format: "%.0f KB/s", speed)
         }
     }
 }
@@ -207,12 +197,16 @@ struct FreshnessView: View {
 // MARK: - Small Widget
 struct SmallWidgetView: View {
     let stats: SystemStats
+    @AppStorage(PulseSharedSettings.Keys.showBattery, store: PulseSharedSettings.defaults) private var showBattery = true
+    @AppStorage(PulseSharedSettings.Keys.showNetwork, store: PulseSharedSettings.defaults) private var showNetwork = true
 
     var body: some View {
         VStack(spacing: 8) {
             // Header
             HStack {
-                BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                if showBattery {
+                    BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                }
                 Spacer()
                 FreshnessView(date: stats.timestamp)
             }
@@ -241,7 +235,9 @@ struct SmallWidgetView: View {
             Spacer()
 
             // Network
-            NetworkView(up: stats.networkUp, down: stats.networkDown)
+            if showNetwork {
+                NetworkView(up: stats.networkUp, down: stats.networkDown)
+            }
         }
         .padding(14)
     }
@@ -250,6 +246,9 @@ struct SmallWidgetView: View {
 // MARK: - Medium Widget
 struct MediumWidgetView: View {
     let stats: SystemStats
+    @AppStorage(PulseSharedSettings.Keys.showBattery, store: PulseSharedSettings.defaults) private var showBattery = true
+    @AppStorage(PulseSharedSettings.Keys.showDisk, store: PulseSharedSettings.defaults) private var showDisk = true
+    @AppStorage(PulseSharedSettings.Keys.showNetwork, store: PulseSharedSettings.defaults) private var showNetwork = true
 
     var body: some View {
         HStack(spacing: 16) {
@@ -271,19 +270,23 @@ struct MediumWidgetView: View {
                     ringColor: AppColors.ramBlue
                 )
 
-                CircularProgressView(
-                    progress: stats.diskUsage,
-                    icon: "internaldrive",
-                    label: "Disk",
-                    size: 48,
-                    ringColor: AppColors.diskAmber
-                )
+                if showDisk {
+                    CircularProgressView(
+                        progress: stats.diskUsage,
+                        icon: "internaldrive",
+                        label: "Disk",
+                        size: 48,
+                        ringColor: AppColors.diskAmber
+                    )
+                }
             }
 
             // Details
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                    if showBattery {
+                        BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                    }
                     Spacer()
                     FreshnessView(date: stats.timestamp)
                 }
@@ -307,24 +310,28 @@ struct MediumWidgetView: View {
                 }
 
                 // Disk row (amber to match ring)
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(AppColors.diskAmber)
-                        .frame(width: 6, height: 6)
-                    Text("Disk")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.6))
-                        .frame(width: 28, alignment: .leading)
-                    Spacer()
-                    Text("\(String(format: "%.0f", stats.diskAvailable))G free")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.85))
-                        .fixedSize()
+                if showDisk {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(AppColors.diskAmber)
+                            .frame(width: 6, height: 6)
+                        Text("Disk")
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(width: 28, alignment: .leading)
+                        Spacer()
+                        Text("\(String(format: "%.0f", stats.diskAvailable))G free")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.85))
+                            .fixedSize()
+                    }
                 }
 
                 Spacer()
 
-                NetworkView(up: stats.networkUp, down: stats.networkDown)
+                if showNetwork {
+                    NetworkView(up: stats.networkUp, down: stats.networkDown)
+                }
             }
         }
         .padding(16)
@@ -334,6 +341,10 @@ struct MediumWidgetView: View {
 // MARK: - Large Widget
 struct LargeWidgetView: View {
     let stats: SystemStats
+    @AppStorage(PulseSharedSettings.Keys.showBattery, store: PulseSharedSettings.defaults) private var showBattery = true
+    @AppStorage(PulseSharedSettings.Keys.showDisk, store: PulseSharedSettings.defaults) private var showDisk = true
+    @AppStorage(PulseSharedSettings.Keys.showNetwork, store: PulseSharedSettings.defaults) private var showNetwork = true
+    @AppStorage(PulseSharedSettings.Keys.showActiveApps, store: PulseSharedSettings.defaults) private var showActiveApps = true
 
     var body: some View {
         VStack(spacing: 12) {
@@ -353,7 +364,9 @@ struct LargeWidgetView: View {
 
                 HStack(spacing: 10) {
                     FreshnessView(date: stats.timestamp)
-                    BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                    if showBattery {
+                        BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                    }
                 }
             }
 
@@ -375,13 +388,15 @@ struct LargeWidgetView: View {
                     ringColor: AppColors.ramBlue
                 )
 
-                CircularProgressView(
-                    progress: stats.diskUsage,
-                    icon: "internaldrive",
-                    label: "Storage",
-                    size: 64,
-                    ringColor: AppColors.diskAmber
-                )
+                if showDisk {
+                    CircularProgressView(
+                        progress: stats.diskUsage,
+                        icon: "internaldrive",
+                        label: "Storage",
+                        size: 64,
+                        ringColor: AppColors.diskAmber
+                    )
+                }
             }
 
             // Divider
@@ -405,65 +420,69 @@ struct LargeWidgetView: View {
                         .foregroundColor(.white)
                 }
 
-                // Storage row with amber indicator
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(AppColors.diskAmber)
-                        .frame(width: 8, height: 8)
-                    Text("Storage Used")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    Text(String(format: "%.0f / %.0f GB", stats.diskUsed, stats.diskTotal))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(.white)
-                }
-
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(AppColors.cpuGreen)
-                        .frame(width: 8, height: 8)
-                    Text("Storage Free")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    Text(String(format: "%.0f GB", stats.diskAvailable))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(.white)
-                }
-
-                if stats.diskPurgeable > 0.1 {
+                if showDisk {
+                    // Storage row with amber indicator
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(Color.white.opacity(0.28))
+                            .fill(AppColors.diskAmber)
                             .frame(width: 8, height: 8)
-                        Text("Purgeable")
+                        Text("Storage Used")
                             .font(.system(size: 11, weight: .regular))
                             .foregroundColor(.white.opacity(0.6))
                         Spacer()
-                        Text(String(format: "%.0f GB", stats.diskPurgeable))
+                        Text(String(format: "%.0f / %.0f GB", stats.diskUsed, stats.diskTotal))
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(.white)
                     }
+
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(AppColors.cpuGreen)
+                            .frame(width: 8, height: 8)
+                        Text("Storage Free")
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer()
+                        Text(String(format: "%.0f GB", stats.diskAvailable))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+
+                    if stats.diskPurgeable > 0.1 {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.white.opacity(0.28))
+                                .frame(width: 8, height: 8)
+                            Text("Purgeable")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundColor(.white.opacity(0.6))
+                            Spacer()
+                            Text(String(format: "%.0f GB", stats.diskPurgeable))
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                    }
                 }
 
-                HStack {
-                    Image(systemName: "network")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppColors.networkBlue)
+                if showNetwork {
+                    HStack {
+                        Image(systemName: "network")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppColors.networkBlue)
 
-                    Text("Network")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        Text("Network")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
 
-                    Spacer()
+                        Spacer()
 
-                    NetworkView(up: stats.networkUp, down: stats.networkDown)
+                        NetworkView(up: stats.networkUp, down: stats.networkDown)
+                    }
                 }
             }
 
             // Apps
-            if !stats.activeApps.isEmpty {
+            if showActiveApps, !stats.activeApps.isEmpty {
                 Rectangle()
                     .fill(Color.white.opacity(0.08))
                     .frame(height: 1)

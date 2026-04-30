@@ -9,13 +9,42 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/build/DerivedData}"
 INSTALL_PATH="${INSTALL_PATH:-/Applications/Pulse.app}"
 TEAM_ID="${DEVELOPMENT_TEAM:-WJX5PBY73S}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-Apple Development: felmon.fekadu@icloud.com (WJX5PBY73S)}"
+LAUNCH_AFTER_INSTALL="${LAUNCH_AFTER_INSTALL:-1}"
+
+if [[ -z "${ENABLE_HARDENED_RUNTIME+x}" ]]; then
+  if [[ "$SIGNING_IDENTITY" == Developer\ ID\ Application:* ]]; then
+    ENABLE_HARDENED_RUNTIME=1
+  else
+    ENABLE_HARDENED_RUNTIME=0
+  fi
+fi
+
+if [[ -z "${CODESIGN_TIMESTAMP+x}" ]]; then
+  if [[ "$SIGNING_IDENTITY" == Developer\ ID\ Application:* ]]; then
+    CODESIGN_TIMESTAMP=1
+  else
+    CODESIGN_TIMESTAMP=none
+  fi
+fi
 
 APP_ENTITLEMENTS="$ROOT_DIR/Sources/MacMonitorApp.entitlements"
 EXTENSION_ENTITLEMENTS="$ROOT_DIR/Sources/MacMonitorWidgetExtension.entitlements"
 BUILT_APP="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/MacMonitorApp.app"
 BUILT_EXTENSION="$BUILT_APP/Contents/PlugIns/MacMonitorWidgetExtension.appex"
 
+CODESIGN_ARGS=(--force --sign "$SIGNING_IDENTITY")
+if [[ "$CODESIGN_TIMESTAMP" == "none" || "$CODESIGN_TIMESTAMP" == "0" ]]; then
+  CODESIGN_ARGS+=(--timestamp=none)
+else
+  CODESIGN_ARGS+=(--timestamp)
+fi
+if [[ "$ENABLE_HARDENED_RUNTIME" == "1" ]]; then
+  CODESIGN_ARGS+=(--options runtime)
+fi
+
 printf 'Using signing identity: %s\n' "$SIGNING_IDENTITY"
+printf 'Hardened runtime: %s\n' "$ENABLE_HARDENED_RUNTIME"
+printf 'Codesign timestamp: %s\n' "$CODESIGN_TIMESTAMP"
 if ! security find-identity -v -p codesigning | grep -Fq "$SIGNING_IDENTITY"; then
   printf 'error: signing identity was not found in the keychain.\n' >&2
   printf 'Set SIGNING_IDENTITY to an installed codesigning identity, or install the Apple Development certificate for team %s.\n' "$TEAM_ID" >&2
@@ -33,16 +62,12 @@ xcodebuild \
   build
 
 printf 'Signing widget extension...\n'
-codesign --force \
-  --sign "$SIGNING_IDENTITY" \
-  --timestamp=none \
+codesign "${CODESIGN_ARGS[@]}" \
   --entitlements "$EXTENSION_ENTITLEMENTS" \
   "$BUILT_EXTENSION"
 
 printf 'Signing app...\n'
-codesign --force \
-  --sign "$SIGNING_IDENTITY" \
-  --timestamp=none \
+codesign "${CODESIGN_ARGS[@]}" \
   --entitlements "$APP_ENTITLEMENTS" \
   "$BUILT_APP"
 
@@ -53,6 +78,7 @@ printf 'Quitting existing Pulse instance if it is running...\n'
 osascript -e 'tell application id "com.macmonitor.widget" to quit' >/dev/null 2>&1 || true
 
 printf 'Installing to %s...\n' "$INSTALL_PATH"
+mkdir -p "$(dirname "$INSTALL_PATH")"
 rsync -a --delete "$BUILT_APP/" "$INSTALL_PATH/"
 
 printf 'Verifying installed app...\n'
@@ -60,7 +86,11 @@ codesign --verify --deep --strict --verbose=2 "$INSTALL_PATH"
 codesign -d --entitlements :- "$INSTALL_PATH" >/dev/null
 codesign -d --entitlements :- "$INSTALL_PATH/Contents/PlugIns/MacMonitorWidgetExtension.appex" >/dev/null
 
-printf 'Launching Pulse...\n'
-open -a Pulse
+if [[ "$LAUNCH_AFTER_INSTALL" == "1" ]]; then
+  printf 'Launching Pulse...\n'
+  open -a Pulse
+else
+  printf 'Skipping launch because LAUNCH_AFTER_INSTALL=%s.\n' "$LAUNCH_AFTER_INSTALL"
+fi
 
 printf 'Done.\n'
