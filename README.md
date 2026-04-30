@@ -38,6 +38,14 @@ open Pulse.xcodeproj
 
 Then press `⌘R` to build and run.
 
+**Scripted Local Install:**
+
+```bash
+./scripts/build-install-release.sh
+```
+
+The script builds the release app, signs the app and widget extension with the shared app-group entitlement, installs it to `/Applications/Pulse.app`, verifies the signature, and relaunches Pulse. It defaults to team `WJX5PBY73S`; override `SIGNING_IDENTITY`, `DEVELOPMENT_TEAM`, or `INSTALL_PATH` if needed.
+
 **Add to Notification Center:**
 
 1. Click the date/time in your menu bar

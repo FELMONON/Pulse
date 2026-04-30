@@ -11,6 +11,7 @@ struct AppColors {
     static let networkBlue = Color(red: 0.4, green: 0.6, blue: 0.95)
     static let networkGreen = Color(red: 0.35, green: 0.75, blue: 0.45)
     static let critical = Color(red: 0.95, green: 0.35, blue: 0.35)
+    static let muted = Color.white.opacity(0.55)
 }
 
 // MARK: - Dynamic Color Based on Threshold (for battery/warnings)
@@ -90,14 +91,17 @@ struct CircularProgressView: View {
 struct BatteryView: View {
     let level: Int
     let isCharging: Bool
+    let hasBattery: Bool
 
     var color: Color {
+        if !hasBattery { return AppColors.muted }
         if level <= 20 { return AppColors.critical }
         if level < 50 { return AppColors.diskAmber }
         return AppColors.batteryGreen
     }
 
     var icon: String {
+        if !hasBattery { return "powerplug" }
         if isCharging { return "battery.100.bolt" }
         switch level {
         case 0..<10: return "battery.0"
@@ -114,7 +118,7 @@ struct BatteryView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(color)
 
-            Text("\(level)%")
+            Text(hasBattery ? "\(level)%" : "AC")
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundColor(.white.opacity(0.9))
         }
@@ -134,7 +138,7 @@ struct NetworkView: View {
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(AppColors.networkBlue)
                 Text(formatSpeed(up))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
             }
 
@@ -144,25 +148,59 @@ struct NetworkView: View {
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(AppColors.networkGreen)
                 Text(formatSpeed(down))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
             }
-
-            Text("MB")
-                .font(.system(size: 8, weight: .regular))
-                .foregroundColor(.white.opacity(0.4))
         }
     }
 
     func formatSpeed(_ speed: Double) -> String {
-        let mbps = speed / 1024
-        if mbps >= 100 {
-            return String(format: "%.0f", mbps)
-        } else if mbps >= 10 {
-            return String(format: "%.0f", mbps)
+        if speed >= 1024 {
+            let mbps = speed / 1024
+            if mbps >= 100 {
+                return String(format: "%.0f MB/s", mbps)
+            } else if mbps >= 10 {
+                return String(format: "%.0f MB/s", mbps)
+            } else {
+                return String(format: "%.1f MB/s", mbps)
+            }
         } else {
-            return String(format: "%.1f", mbps)
+            return String(format: "%.0f KB/s", speed)
         }
+    }
+}
+
+// MARK: - Freshness View
+struct FreshnessView: View {
+    let date: Date
+
+    private var age: TimeInterval {
+        max(Date().timeIntervalSince(date), 0)
+    }
+
+    private var isStale: Bool {
+        age > 120
+    }
+
+    private var label: String {
+        if age < 60 {
+            return "Now"
+        } else if age < 3600 {
+            return "\(Int(age / 60))m"
+        } else {
+            return "\(Int(age / 3600))h"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isStale ? "clock.badge.exclamationmark" : "clock")
+                .font(.system(size: 10, weight: .medium))
+
+            Text(label)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+        }
+        .foregroundColor(isStale ? AppColors.diskAmber : AppColors.muted)
     }
 }
 
@@ -174,8 +212,9 @@ struct SmallWidgetView: View {
         VStack(spacing: 8) {
             // Header
             HStack {
-                BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging)
+                BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
                 Spacer()
+                FreshnessView(date: stats.timestamp)
             }
 
             Spacer()
@@ -243,7 +282,11 @@ struct MediumWidgetView: View {
 
             // Details
             VStack(alignment: .leading, spacing: 8) {
-                BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging)
+                HStack {
+                    BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                    Spacer()
+                    FreshnessView(date: stats.timestamp)
+                }
 
                 Spacer()
 
@@ -273,7 +316,7 @@ struct MediumWidgetView: View {
                         .foregroundColor(.white.opacity(0.6))
                         .frame(width: 28, alignment: .leading)
                     Spacer()
-                    Text("\(String(format: "%.0f", stats.diskUsed))/\(String(format: "%.0f", stats.diskTotal))G")
+                    Text("\(String(format: "%.0f", stats.diskAvailable))G free")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.85))
                         .fixedSize()
@@ -308,7 +351,10 @@ struct LargeWidgetView: View {
 
                 Spacer()
 
-                BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging)
+                HStack(spacing: 10) {
+                    FreshnessView(date: stats.timestamp)
+                    BatteryView(level: stats.batteryLevel, isCharging: stats.isCharging, hasBattery: stats.hasBattery)
+                }
             }
 
             // Activity Rings (distinct colors)
@@ -373,6 +419,34 @@ struct LargeWidgetView: View {
                         .foregroundColor(.white)
                 }
 
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(AppColors.cpuGreen)
+                        .frame(width: 8, height: 8)
+                    Text("Storage Free")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(.white.opacity(0.6))
+                    Spacer()
+                    Text(String(format: "%.0f GB", stats.diskAvailable))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(.white)
+                }
+
+                if stats.diskPurgeable > 0.1 {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.white.opacity(0.28))
+                            .frame(width: 8, height: 8)
+                        Text("Purgeable")
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer()
+                        Text(String(format: "%.0f GB", stats.diskPurgeable))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                }
+
                 HStack {
                     Image(systemName: "network")
                         .font(.system(size: 12, weight: .medium))
@@ -404,6 +478,8 @@ struct LargeWidgetView: View {
                             Text(app)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(Color.white.opacity(0.1))

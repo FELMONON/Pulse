@@ -4,7 +4,7 @@ import IOKit.ps
 import AppKit
 
 // MARK: - System Statistics Model
-struct SystemStats {
+struct SystemStats: Codable {
     var cpuUsage: Double
     var memoryUsage: Double
     var memoryUsed: Double // GB
@@ -12,12 +12,19 @@ struct SystemStats {
     var diskUsage: Double
     var diskUsed: Double // GB
     var diskTotal: Double // GB
+    var diskAvailable: Double // GB
+    var diskPurgeable: Double // GB
     var batteryLevel: Int
     var isCharging: Bool
+    var hasBattery: Bool
     var networkUp: Double // KB/s
     var networkDown: Double // KB/s
     var activeApps: [String]
     var timestamp: Date
+
+    var isStale: Bool {
+        Date().timeIntervalSince(timestamp) > 120
+    }
 
     static var placeholder: SystemStats {
         SystemStats(
@@ -28,8 +35,11 @@ struct SystemStats {
             diskUsage: 0.58,
             diskUsed: 234.5,
             diskTotal: 512.0,
+            diskAvailable: 277.5,
+            diskPurgeable: 0,
             batteryLevel: 78,
             isCharging: true,
+            hasBattery: true,
             networkUp: 125.4,
             networkDown: 892.1,
             activeApps: ["Safari", "Xcode", "Slack"],
@@ -38,24 +48,136 @@ struct SystemStats {
     }
 }
 
+// MARK: - Shared Stats Cache
+enum SystemStatsCache {
+    private static let appGroupID = "group.com.macmonitor.widget.shared"
+    private static let legacySuiteName = "com.macmonitor.widget.shared"
+    private static let statsKey = "latestSystemStats"
+
+    private static let defaults: UserDefaults = {
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) != nil,
+           let groupDefaults = UserDefaults(suiteName: appGroupID) {
+            return groupDefaults
+        }
+
+        return UserDefaults(suiteName: legacySuiteName) ?? .standard
+    }()
+
+    static func save(_ stats: SystemStats) {
+        guard let data = try? JSONEncoder().encode(stats) else {
+            return
+        }
+
+        defaults.set(data, forKey: statsKey)
+        defaults.synchronize()
+    }
+
+    static func load(maxAge: TimeInterval) -> SystemStats? {
+        guard let data = defaults.data(forKey: statsKey),
+              let stats = try? JSONDecoder().decode(SystemStats.self, from: data) else {
+            return nil
+        }
+
+        let age = Date().timeIntervalSince(stats.timestamp)
+        guard age >= 0 && age <= maxAge else {
+            return nil
+        }
+
+        return stats
+    }
+}
+
+// MARK: - Testable Math
+enum SystemStatsMath {
+    struct CPUCounters: Equatable {
+        let used: UInt64
+        let total: UInt64
+    }
+
+    struct NetworkInterfaceCounters: Equatable {
+        let bytesIn: UInt64
+        let bytesOut: UInt64
+    }
+
+    struct NetworkCounters: Equatable {
+        let interfaces: [String: NetworkInterfaceCounters]
+        let date: Date
+    }
+
+    static func cpuUsage(previous: CPUCounters?, current: CPUCounters) -> Double {
+        guard current.total > 0 else {
+            return 0
+        }
+
+        guard let previous,
+              current.total >= previous.total,
+              current.used >= previous.used else {
+            return clamp(Double(current.used) / Double(current.total))
+        }
+
+        let totalDelta = current.total - previous.total
+        guard totalDelta > 0 else {
+            return 0
+        }
+
+        let usedDelta = current.used - previous.used
+        return clamp(Double(usedDelta) / Double(totalDelta))
+    }
+
+    static func networkSpeed(
+        previous: NetworkCounters?,
+        current: NetworkCounters,
+        minimumInterval: TimeInterval = 0.2
+    ) -> (up: Double, down: Double) {
+        guard let previous else {
+            return (0, 0)
+        }
+
+        let timeDiff = current.date.timeIntervalSince(previous.date)
+        guard timeDiff > minimumInterval else {
+            return (0, 0)
+        }
+
+        var bytesInDelta: UInt64 = 0
+        var bytesOutDelta: UInt64 = 0
+
+        for (name, currentCounters) in current.interfaces {
+            guard let previousCounters = previous.interfaces[name],
+                  currentCounters.bytesIn >= previousCounters.bytesIn,
+                  currentCounters.bytesOut >= previousCounters.bytesOut else {
+                continue
+            }
+
+            bytesInDelta += currentCounters.bytesIn - previousCounters.bytesIn
+            bytesOutDelta += currentCounters.bytesOut - previousCounters.bytesOut
+        }
+
+        return (
+            up: Double(bytesOutDelta) / timeDiff / 1024,
+            down: Double(bytesInDelta) / timeDiff / 1024
+        )
+    }
+
+    private static func clamp(_ value: Double) -> Double {
+        min(max(value, 0), 1)
+    }
+}
+
 // MARK: - System Monitor
 class SystemMonitor {
     static let shared = SystemMonitor()
 
-    // Use UserDefaults to persist network data between widget refreshes
-    private let defaults = UserDefaults(suiteName: "com.macmonitor.widget.shared") ?? .standard
+    private var previousCPUCounters: SystemStatsMath.CPUCounters?
+    private var previousNetworkCounters: SystemStatsMath.NetworkCounters?
 
-    private var previousNetworkIn: UInt64 {
-        get { UInt64(defaults.integer(forKey: "previousNetworkIn")) }
-        set { defaults.set(Int(newValue), forKey: "previousNetworkIn") }
+    func getCachedStats(maxAge: TimeInterval = 120) -> SystemStats? {
+        SystemStatsCache.load(maxAge: maxAge)
     }
-    private var previousNetworkOut: UInt64 {
-        get { UInt64(defaults.integer(forKey: "previousNetworkOut")) }
-        set { defaults.set(Int(newValue), forKey: "previousNetworkOut") }
-    }
-    private var lastNetworkCheck: Date {
-        get { defaults.object(forKey: "lastNetworkCheck") as? Date ?? Date() }
-        set { defaults.set(newValue, forKey: "lastNetworkCheck") }
+
+    func getStatsAndCache() -> SystemStats {
+        let stats = getStats()
+        SystemStatsCache.save(stats)
+        return stats
     }
 
     func getStats() -> SystemStats {
@@ -73,8 +195,11 @@ class SystemMonitor {
             diskUsage: disk.percentage,
             diskUsed: disk.used,
             diskTotal: disk.total,
+            diskAvailable: disk.available,
+            diskPurgeable: disk.purgeable,
             batteryLevel: battery.level,
             isCharging: battery.isCharging,
+            hasBattery: battery.hasBattery,
             networkUp: network.up,
             networkDown: network.down,
             activeApps: getActiveApps(),
@@ -84,6 +209,18 @@ class SystemMonitor {
 
     // MARK: - CPU Usage
     private func getCPUUsage() -> Double {
+        guard let current = getCPUCounters(), current.total > 0 else {
+            return 0.0
+        }
+
+        defer {
+            previousCPUCounters = current
+        }
+
+        return SystemStatsMath.cpuUsage(previous: previousCPUCounters, current: current)
+    }
+
+    private func getCPUCounters() -> SystemStatsMath.CPUCounters? {
         var cpuInfo: processor_info_array_t?
         var numCpuInfo: mach_msg_type_number_t = 0
         var numCPUs: natural_t = 0
@@ -94,30 +231,33 @@ class SystemMonitor {
                                        &cpuInfo,
                                        &numCpuInfo)
 
-        guard err == KERN_SUCCESS, let info = cpuInfo else {
-            return 0.0
+        guard err == KERN_SUCCESS, let info = cpuInfo, numCPUs > 0 else {
+            return nil
         }
 
-        var totalUsage: Double = 0
+        defer {
+            vm_deallocate(
+                mach_task_self_,
+                vm_address_t(bitPattern: info),
+                vm_size_t(numCpuInfo) * vm_size_t(MemoryLayout<integer_t>.stride)
+            )
+        }
+
+        var usedTicks: UInt64 = 0
+        var totalTicks: UInt64 = 0
 
         for i in 0..<Int(numCPUs) {
             let offset = Int(CPU_STATE_MAX) * i
-            let user = Double(info[offset + Int(CPU_STATE_USER)])
-            let system = Double(info[offset + Int(CPU_STATE_SYSTEM)])
-            let idle = Double(info[offset + Int(CPU_STATE_IDLE)])
-            let nice = Double(info[offset + Int(CPU_STATE_NICE)])
+            let user = UInt64(Int64(max(info[offset + Int(CPU_STATE_USER)], 0)))
+            let system = UInt64(Int64(max(info[offset + Int(CPU_STATE_SYSTEM)], 0)))
+            let idle = UInt64(Int64(max(info[offset + Int(CPU_STATE_IDLE)], 0)))
+            let nice = UInt64(Int64(max(info[offset + Int(CPU_STATE_NICE)], 0)))
 
-            let total = user + system + idle + nice
-            let used = user + system + nice
-
-            if total > 0 {
-                totalUsage += used / total
-            }
+            usedTicks += user + system + nice
+            totalTicks += user + system + idle + nice
         }
 
-        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(numCpuInfo) * vm_size_t(MemoryLayout<integer_t>.stride))
-
-        return min(totalUsage / Double(numCPUs), 1.0)
+        return SystemStatsMath.CPUCounters(used: usedTicks, total: totalTicks)
     }
 
     // MARK: - Memory Usage
@@ -149,24 +289,32 @@ class SystemMonitor {
     }
 
     // MARK: - Disk Usage
-    private func getDiskUsage() -> (percentage: Double, used: Double, total: Double) {
+    private func getDiskUsage() -> (percentage: Double, used: Double, total: Double, available: Double, purgeable: Double) {
         do {
             let fileURL = URL(fileURLWithPath: "/")
-            let values = try fileURL.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey])
+            let values = try fileURL.resourceValues(forKeys: [
+                .volumeTotalCapacityKey,
+                .volumeAvailableCapacityKey,
+                .volumeAvailableCapacityForImportantUsageKey
+            ])
 
-            if let total = values.volumeTotalCapacity,
-               let available = values.volumeAvailableCapacityForImportantUsage {
+            if let total = values.volumeTotalCapacity {
+                let freeBytes = Double(values.volumeAvailableCapacity ?? 0)
+                let importantAvailableBytes = values.volumeAvailableCapacityForImportantUsage.map(Double.init) ?? freeBytes
                 let totalGB = Double(total) / 1_000_000_000
-                let usedGB = totalGB - (Double(available) / 1_000_000_000)
-                return (usedGB / totalGB, usedGB, totalGB)
+                let freeGB = freeBytes / 1_000_000_000
+                let usedGB = max(totalGB - freeGB, 0)
+                let purgeableGB = max((importantAvailableBytes - freeBytes) / 1_000_000_000, 0)
+                let percentage = totalGB > 0 ? usedGB / totalGB : 0
+                return (min(max(percentage, 0), 1), usedGB, totalGB, freeGB, purgeableGB)
             }
         } catch {}
 
-        return (0, 0, 0)
+        return (0, 0, 0, 0, 0)
     }
 
     // MARK: - Battery
-    private func getBatteryLevel() -> (level: Int, isCharging: Bool) {
+    private func getBatteryLevel() -> (level: Int, isCharging: Bool, hasBattery: Bool) {
         let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
         let sources = IOPSCopyPowerSourcesList(snapshot).takeRetainedValue() as Array
 
@@ -174,58 +322,75 @@ class SystemMonitor {
             if let info = IOPSGetPowerSourceDescription(snapshot, source).takeUnretainedValue() as? [String: Any] {
                 if let capacity = info[kIOPSCurrentCapacityKey] as? Int,
                    let isCharging = info[kIOPSIsChargingKey] as? Bool {
-                    return (capacity, isCharging)
+                    return (capacity, isCharging, true)
                 }
             }
         }
 
-        return (100, false)
+        return (0, false, false)
     }
 
     // MARK: - Network Speed
     private func getNetworkSpeed() -> (up: Double, down: Double) {
+        guard let current = getNetworkCounters() else {
+            return (0, 0)
+        }
+
+        defer {
+            previousNetworkCounters = current
+        }
+
+        return SystemStatsMath.networkSpeed(previous: previousNetworkCounters, current: current)
+    }
+
+    private func getNetworkCounters() -> SystemStatsMath.NetworkCounters? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
-            return (0, 0)
+            return nil
         }
         defer { freeifaddrs(ifaddr) }
 
-        var totalIn: UInt64 = 0
-        var totalOut: UInt64 = 0
+        var interfaces: [String: SystemStatsMath.NetworkInterfaceCounters] = [:]
 
-        var ptr = firstAddr
-        while true {
-            let interface = ptr.pointee
-            let name = String(cString: interface.ifa_name)
-
-            if name.hasPrefix("en") || name.hasPrefix("lo") {
-                if let data = interface.ifa_data {
-                    let networkData = data.assumingMemoryBound(to: if_data.self).pointee
-                    totalIn += UInt64(networkData.ifi_ibytes)
-                    totalOut += UInt64(networkData.ifi_obytes)
-                }
+        var ptr: UnsafeMutablePointer<ifaddrs>? = firstAddr
+        while let currentPtr = ptr {
+            defer {
+                ptr = currentPtr.pointee.ifa_next
             }
 
-            guard let next = interface.ifa_next else { break }
-            ptr = next
+            let interface = currentPtr.pointee
+            guard let address = interface.ifa_addr,
+                  address.pointee.sa_family == sa_family_t(AF_LINK) else {
+                continue
+            }
+
+            let flags = Int32(interface.ifa_flags)
+            guard (flags & IFF_UP) != 0,
+                  (flags & IFF_RUNNING) != 0,
+                  (flags & IFF_LOOPBACK) == 0 else {
+                continue
+            }
+
+            let name = String(cString: interface.ifa_name)
+            guard !name.hasPrefix("awdl"),
+                  !name.hasPrefix("llw"),
+                  !name.hasPrefix("utun"),
+                  !name.hasPrefix("gif"),
+                  !name.hasPrefix("stf") else {
+                continue
+            }
+
+            if let data = interface.ifa_data {
+                let networkData = data.assumingMemoryBound(to: if_data.self).pointee
+                let existing = interfaces[name] ?? SystemStatsMath.NetworkInterfaceCounters(bytesIn: 0, bytesOut: 0)
+                interfaces[name] = SystemStatsMath.NetworkInterfaceCounters(
+                    bytesIn: existing.bytesIn + UInt64(networkData.ifi_ibytes),
+                    bytesOut: existing.bytesOut + UInt64(networkData.ifi_obytes)
+                )
+            }
         }
 
-        let now = Date()
-        let timeDiff = now.timeIntervalSince(lastNetworkCheck)
-
-        var speedIn: Double = 0
-        var speedOut: Double = 0
-
-        if timeDiff > 0 && previousNetworkIn > 0 {
-            speedIn = Double(totalIn - previousNetworkIn) / timeDiff / 1024
-            speedOut = Double(totalOut - previousNetworkOut) / timeDiff / 1024
-        }
-
-        previousNetworkIn = totalIn
-        previousNetworkOut = totalOut
-        lastNetworkCheck = now
-
-        return (max(speedOut, 0), max(speedIn, 0))
+        return SystemStatsMath.NetworkCounters(interfaces: interfaces, date: Date())
     }
 
     // MARK: - Active Apps

@@ -9,18 +9,22 @@ struct MacMonitorEntry: TimelineEntry {
 
 // MARK: - Timeline Provider
 struct MacMonitorProvider: TimelineProvider {
+    private func currentStats() -> SystemStats {
+        SystemMonitor.shared.getCachedStats(maxAge: 120) ?? SystemMonitor.shared.getStats()
+    }
+
     func placeholder(in context: Context) -> MacMonitorEntry {
         MacMonitorEntry(date: Date(), stats: .placeholder)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MacMonitorEntry) -> Void) {
-        let entry = MacMonitorEntry(date: Date(), stats: SystemMonitor.shared.getStats())
+        let entry = MacMonitorEntry(date: Date(), stats: currentStats())
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MacMonitorEntry>) -> Void) {
         let currentDate = Date()
-        let stats = SystemMonitor.shared.getStats()
+        let stats = currentStats()
         let entry = MacMonitorEntry(date: currentDate, stats: stats)
 
         // Refresh every 15 seconds (fastest reliable rate for widgets)

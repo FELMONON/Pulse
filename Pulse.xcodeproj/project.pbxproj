@@ -167,9 +167,11 @@
 				TargetAttributes = {
 					A8000001 = {
 						CreatedOnToolsVersion = 15.0;
+						DevelopmentTeam = WJX5PBY73S;
 					};
 					A8000002 = {
 						CreatedOnToolsVersion = 15.0;
+						DevelopmentTeam = WJX5PBY73S;
 					};
 				};
 			};
@@ -313,6 +315,7 @@
 				CODE_SIGN_ENTITLEMENTS = Sources/MacMonitorWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WJX5PBY73S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Sources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mac Monitor";
@@ -339,6 +342,7 @@
 				CODE_SIGN_ENTITLEMENTS = Sources/MacMonitorWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WJX5PBY73S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Sources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mac Monitor";
@@ -365,6 +369,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WJX5PBY73S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -389,6 +394,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WJX5PBY73S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";

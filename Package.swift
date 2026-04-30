@@ -8,6 +8,19 @@ let package = Package(
         .library(name: "MacMonitorWidget", targets: ["MacMonitorWidget"])
     ],
     targets: [
-        .target(name: "MacMonitorWidget", path: "Sources")
+        .target(
+            name: "MacMonitorWidget",
+            path: "Sources",
+            exclude: [
+                "Assets.xcassets",
+                "Info.plist",
+                "MacMonitorApp.entitlements",
+                "MacMonitorApp.swift",
+                "MacMonitorWidget.swift",
+                "MacMonitorWidgetExtension.entitlements",
+                "WidgetViews.swift"
+            ]
+        ),
+        .testTarget(name: "MacMonitorWidgetTests", dependencies: ["MacMonitorWidget"])
     ]
 )

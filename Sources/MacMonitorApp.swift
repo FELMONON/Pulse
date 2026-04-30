@@ -35,7 +35,7 @@ struct VisualEffectBackground: NSViewRepresentable {
 
 // MARK: - Main Content View
 struct ContentView: View {
-    @State private var stats = SystemStats.placeholder
+    @State private var stats = SystemMonitor.shared.getCachedStats(maxAge: 120) ?? .placeholder
     @State private var selectedSize: WidgetSize = .medium
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -78,9 +78,16 @@ struct ContentView: View {
                     .padding(.bottom, 20)
             }
         }
-        .onReceive(timer) { _ in
-            stats = SystemMonitor.shared.getStats()
+        .onAppear {
+            refreshStats()
         }
+        .onReceive(timer) { _ in
+            refreshStats()
+        }
+    }
+
+    private func refreshStats() {
+        stats = SystemMonitor.shared.getStatsAndCache()
     }
 
     // MARK: - Title Bar
